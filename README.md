@@ -13,6 +13,8 @@ type Self = Classe.Self<typeof(Gun)>
 
 function Gun.construct(self)
   self.ammo = 10
+
+  return self
 end
 
 function Gun.shot(self: Self)
