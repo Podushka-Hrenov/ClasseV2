@@ -1,8 +1,8 @@
 # ClasseV2 (Alpha)
 
-ClasseV2 is an improved version of Classe that is under development. It will be distinguished by the performance, security, and convenience of modern type detection
+__ClasseV2__ is an improved version of [Classe](https://github.com/Podushka-Hrenov/Classe) that is under development. It will be distinguished by the performance, security, and convenience of modern type detection
 
-Example of ClasseV2
+Example of class
 
 ```luau
 --!strict
