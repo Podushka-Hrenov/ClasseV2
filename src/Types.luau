@@ -1,5 +1,22 @@
 --!strict
 
+export type function packTableIntersection(t: type)
+	if not t:is'intersection' then return t end
+	
+	local components = t:components()
+	local result = types.newtable()
+	
+	for i, comp in components do
+		if not comp:is'table' then continue end
+		
+		for k, v in comp:properties() do
+			result:setproperty(k, v.write)
+		end
+	end
+	
+	return result
+end
+
 export type function setproperty(t: type, key: type, value: type)
 	if t:is('intersection') then
 		local components = t:components()
@@ -69,6 +86,8 @@ end
 
 export type function moveParams(src: type, 
 	i: type, j: type, t: type, to: type)
+	
+	if not src:is'function' then return src end
 
 	local i = tonumber(i:value()) or 1
 	local t = tonumber(t:value()) or 1
