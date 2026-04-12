@@ -1,49 +1,57 @@
 --!strict
 
+local setmetatable = setmetatable 
+
 local Types = require(script.Types)
+
+type func = (...any) -> any
+type metaOfClass<C> = index<getmetatable<C & any>, 'meta'>
 
 type Meta<D, E> = setmetatable<D, {
 	read extends: (E & AbstractClasse)?,
-	read attrs: index<Types.find<E, 'meta'>, 'attrs'> & Types.getReturningElement<
+	read attrs: index<metaOfClass<E>, 'attrs'> & Types.getReturningElement<
 		index<D, 'construct'>, '1'>,
-	read meta: index<Types.find<E, 'meta'>, 'meta'> & D
+	read meta: index<metaOfClass<E>, 'meta'> & D
 }>
 
-export type BaseMeta = Meta<{
-	construct: (...any) -> any,
-	init: ((...any) -> ...any)?,
-	
-	[any]: any
-}, nil>
+type BaseMeta = Meta<{
+	construct: func,
+	init: func,
+}, any>
 
-type AbstractClasse = setmetatable<{
-	read new: (...any) -> ...any
+export type AbstractClasse = setmetatable<{
+	read new: func,
 }, {
 	read childs: {AbstractClasse},
 	read parent: AbstractClasse?,
 	read overrides: {[string]: true},
-	read initChain: {(...any) -> ...any}?,
+	read initChain: {func}?,
 	read metadata: {
 		__index: {[any]: any}
 	},
-	read meta: {}
+	read meta: {},
+	read constructor: func
 }>
 
-type Classe<M> = setmetatable<{
-	read new: index<M, 'construct'>
+export type Classe<M> = setmetatable<{
+	read new: Types.moveParams<
+		index<M, 'construct'>, '2', nil, '1', () -> Self<M>>
 }, {
 	read childs: {AbstractClasse},
-	read parent: index<getmetatable<M>, 'extends'>?,
+	read parent: index<getmetatable<M & BaseMeta>, 'extends'>,
 	read overrides: {[string]: true},
-	read initChain: {(...any) -> ...any}?,
+	read initChain: {func}?,
 	read metadata: {
-		__index: setmetatable<M, nil>
+		__index: {[any]: any}
 	},
-	read meta: M
+	read meta: getmetatable<M>,
+	read constructor: index<M, 'construct'> & func
 }>
 
-export type Self<M> = index<getmetatable<M>, 'attrs'>
-	& index<getmetatable<M>, 'meta'>
+export type Self<M> = index<getmetatable<M>, 'attrs'> & 
+	index<getmetatable<M>, 'meta'>
+	
+type Super<E> = index<getmetatable<E>, 'constructor'>
 
 local Classe, __meta = {}, {}
 
@@ -75,7 +83,8 @@ function Classe.build<M>(meta: M & BaseMeta): Classe<M>
 	local parent: AbstractClasse? = getmetatable(
 		meta :: BaseMeta).extends
 	
-	local parentData = parent and getmetatable(parent)
+	local parentData = if parent then 
+		getmetatable(parent) else nil
 	
 	local data = {
 		parent = parent,
@@ -85,7 +94,7 @@ function Classe.build<M>(meta: M & BaseMeta): Classe<M>
 		__newindex = __meta.__newindex
 	}
 	
-	local initChain: {(...any) -> ...any}? = nil
+	local initChain: {func}? = nil
 	
 	if parentData then
 		for k, v in parentData.metadata.__index do
@@ -114,11 +123,14 @@ function Classe.build<M>(meta: M & BaseMeta): Classe<M>
 	data.initChain = initChain
 	
 	local metadata = {__index = {}}
+	data.metadata = metadata
+	meta.construct, meta.init = nil, nil
 	
 	for index: any, data: any in pairs(meta) do
 		if type(index) == 'string' and
 			index:find('^__') then
 
+			metadata[index] = data
 			continue
 		end
 
@@ -129,7 +141,7 @@ function Classe.build<M>(meta: M & BaseMeta): Classe<M>
 	
 	local self = {new = function(...: any)
 		local obj = {}; constructor(obj, ...)
-		setmetatable(obj, meta)
+		setmetatable(obj, metadata)
 
 		for i = 1, initChainLen do
 			initChain[i](obj)
@@ -142,12 +154,15 @@ function Classe.build<M>(meta: M & BaseMeta): Classe<M>
 end
 
 function Classe.meta<M, E>(meta: M & {}, 
-	extends: (E & AbstractClasse)?): Meta<M, E>
+	extends: (E & AbstractClasse)?): (Meta<M, E>, Super<E>)
+	
+	local super = if extends then getmetatable(
+		extends :: AbstractClasse).constructor else nil
 	
 	return setmetatable(meta, table.freeze{
 		extends = extends,
 		
-	}) :: Meta<M, E>
+	}), super :: Super<E>
 end
 
 return table.freeze(Classe)
