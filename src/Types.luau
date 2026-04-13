@@ -1,107 +1,166 @@
 --!strict
 
-export type function packTableIntersection(t: type)
-	if not t:is'intersection' then return t end
+local Types = require(script.Types)
+
+type func = (...any) -> any
+type metaOfClass<C> = index<getmetatable<C & any>, 'meta'>
+
+type Meta<D, E> = setmetatable<D, {
+	read extends: (E & AbstractClasse)?,
 	
-	local components = t:components()
-	local result = types.newtable()
+	read self: Types.getReturningElement<
+		index<D, 'construct'>, '1'> & D &
+		index<metaOfClass<E>, 'self'>,
+}>
+
+type BaseMetaFields = {
+	construct: (...any) -> any,
+	init: func,
+} type BaseMeta = Meta<BaseMetaFields, any>
+
+export type AbstractClasse = setmetatable<{
+	read new: func,
+}, {
+	read childs: {AbstractClasse},
+	read parent: AbstractClasse?,
+	read overrides: {[any]: true},
+	read initChain: {func}?,
+	read metadata: {
+		__index: {[any]: any}
+	},
+	read meta: {[any]: any},
+	read constructor: func
+}>
+
+export type Classe<M> = setmetatable<{
+	read new: Types.moveParams<
+		index<M, 'construct'>, '2', nil, '1', () -> Self<M>>
+}, {
+	read childs: {AbstractClasse},
+	read parent: index<getmetatable<M & BaseMeta>, 'extends'>,
+	read overrides: {[any]: true},
+	read initChain: {func}?,
+	read metadata: {
+		__index: {[any]: any}
+	},
+	read meta: getmetatable<M>,
+	read constructor: index<M, 'construct'> & func
+}>
+
+export type Self<M> = index<getmetatable<M>, 'self'>
+
+type Super<E> = index<getmetatable<E & any>, 'constructor'>
+
+local Classe, __meta = {}, {}
+
+function __meta.__newindex(self: AbstractClasse, 
+	key: any, value: any)
 	
-	for i, comp in components do
-		if not comp:is'table' then continue end
+	local data = getmetatable(self)
+	
+	if value == nil and data.parent then
+		value = getmetatable(data.parent).metadata.__index[key]
+		data.overrides[key] = nil
+	else
+		data.overrides[key] = true
+	end
+	
+	data.metadata.__index[key] = value
+
+	for i, child in data.childs do
+		local childData = getmetatable(child)
 		
-		for k, v in comp:properties() do
-			result:setproperty(k, v.write)
+		if childData.overrides[key] then continue end
+		childData.metadata.__index[key] = value
+	end
+end
+
+function Classe.build<M>(meta: M & BaseMeta): Classe<M>
+	
+	local constructor = meta.construct
+	local parent: AbstractClasse? = getmetatable(
+		meta :: BaseMeta).extends
+	
+	local parentData = if parent then 
+		getmetatable(parent) else nil
+	
+	local data = {
+		parent = parent,
+		childs = {},
+		overrides = {},
+		constructor = constructor,
+		__newindex = __meta.__newindex
+	}
+	
+	local initChain: {func}? = nil
+	
+	if parentData then
+		for k, v in parentData.metadata.__index do
+			if meta[k] == nil then meta[k] = v
+				continue 
+			end 
+			data.overrides[k] = true
 		end
+		
+		if meta.init then
+			initChain = if parentData.initChain then 
+				table.clone(parentData.initChain)
+			else {}
+		
+			table.insert(initChain, meta.init)
+			table.freeze(initChain)
+		else
+			initChain = parentData.initChain
+		end
+	else
+		initChain = if meta.init then 
+			table.freeze{meta.init} 
+		else nil 
 	end
 	
-	return result
-end
+	data.initChain = initChain
+	
+	local metadata = {__index = {}}
+	data.metadata = metadata
+	meta.construct, meta.init = nil, nil
+	
+	for index: any, data: any in meta :: BaseMeta do
+		if type(index) == 'string' and
+			index:find('^__') then
 
-export type function setproperty(t: type, key: type, value: type)
-	if t:is('intersection') then
-		local components = t:components()
-
-		local sometablecomp: type
-		local target: type
-
-		for i, comp in components do
-			if not comp:is'table' then continue end
-			sometablecomp = comp
-
-			if comp:readproperty(key) then 
-				target = comp; break 
-			end
+			metadata[index] = data
+			continue
 		end
 
-		if not target then 
-			if not sometablecomp then return t end
-			target = sometablecomp 
+		metadata.__index[index] = data
+	end
+	
+	local initChainLen = initChain and #initChain or 0
+	
+	local self = {new = function(...: any)
+		local obj = {}; constructor(obj, ...)
+		setmetatable(obj, metadata)
+
+		for i = 1, initChainLen do
+			initChain[i](obj)
 		end
 
-		target:setproperty(key, value)
-
-		return types.intersectionof(unpack(components))
-	end
-
-	t:setproperty(key, value)
-
-	return t
+		return obj
+	end}
+	
+	return setmetatable(self, table.freeze(data)) :: Classe<M>
 end
 
-export type function find(t: type, key: type)
-	if not (t:is'table' or t:is'intersection') then
-		return types.any
-	end
-
-	assert(key:is'singleton')
-
-	if t:is('intersection') then
-		local components = t:components()
-		local target: type
-
-		for i, comp in components do
-			if not comp:is'table' then continue end
-			local read = comp:readproperty(key)
-
-			if read then return read end
-		end
-
-		return types.any
-	end
-
-	return t:readproperty(key) or types.any
+function Classe.meta<M, E>(meta: M & {}, 
+	extends: (E & AbstractClasse)?): (Meta<M, E>, Super<E>)
+	
+	local super = if extends then getmetatable(
+		extends :: AbstractClasse).constructor else nil
+	
+	return setmetatable(meta, table.freeze{
+		extends = extends,
+		
+	}) :: Meta<M, E>, super :: Super<E>
 end
 
-export type function getReturningElement(fn: type, 
-	index: type)
-	
-	local index = tonumber(index:value())
-	if not index then return types.any end
-	
-	local returns = fn:returns()
-	if not returns.head then return types.any end
-	
-	return returns.head[index]
-end
-
-export type function moveParams(src: type, 
-	i: type, j: type, t: type, to: type)
-	
-	if not src:is'function' then return src end
-
-	local i = tonumber(i:value()) or 1
-	local t = tonumber(t:value()) or 1
-	local j = tonumber(j:value())
-
-	local srcParams = src:parameters()
-	if not srcParams.head then return to end
-	
-	local head = table.move(srcParams.head, 
-		i, j or #srcParams.head, t, to:parameters().head or {})
-
-	to:setparameters(head, srcParams.tail)
-
-	return to
-end
-
-return nil
+return table.freeze(Classe)
