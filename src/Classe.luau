@@ -1,7 +1,5 @@
 --!strict
 
-local setmetatable = setmetatable 
-
 local Types = require(script.Types)
 
 type func = (...any) -> any
@@ -9,27 +7,28 @@ type metaOfClass<C> = index<getmetatable<C & any>, 'meta'>
 
 type Meta<D, E> = setmetatable<D, {
 	read extends: (E & AbstractClasse)?,
-	read attrs: index<metaOfClass<E>, 'attrs'> & Types.getReturningElement<
-		index<D, 'construct'>, '1'>,
-	read meta: index<metaOfClass<E>, 'meta'> & D
+	
+	read self: Types.getReturningElement<
+		index<D, 'construct'>, '1'> & D &
+		index<metaOfClass<E>, 'self'>,
 }>
 
-type BaseMeta = Meta<{
-	construct: func,
+type BaseMetaFields = {
+	construct: (...any) -> any,
 	init: func,
-}, any>
+} type BaseMeta = Meta<BaseMetaFields, any>
 
 export type AbstractClasse = setmetatable<{
 	read new: func,
 }, {
 	read childs: {AbstractClasse},
 	read parent: AbstractClasse?,
-	read overrides: {[string]: true},
+	read overrides: {[any]: true},
 	read initChain: {func}?,
 	read metadata: {
 		__index: {[any]: any}
 	},
-	read meta: {},
+	read meta: {[any]: any},
 	read constructor: func
 }>
 
@@ -39,7 +38,7 @@ export type Classe<M> = setmetatable<{
 }, {
 	read childs: {AbstractClasse},
 	read parent: index<getmetatable<M & BaseMeta>, 'extends'>,
-	read overrides: {[string]: true},
+	read overrides: {[any]: true},
 	read initChain: {func}?,
 	read metadata: {
 		__index: {[any]: any}
@@ -48,10 +47,9 @@ export type Classe<M> = setmetatable<{
 	read constructor: index<M, 'construct'> & func
 }>
 
-export type Self<M> = index<getmetatable<M>, 'attrs'> & 
-	index<getmetatable<M>, 'meta'>
-	
-type Super<E> = index<getmetatable<E>, 'constructor'>
+export type Self<M> = index<getmetatable<M>, 'self'>
+
+type Super<E> = index<getmetatable<E & any>, 'constructor'>
 
 local Classe, __meta = {}, {}
 
@@ -126,7 +124,7 @@ function Classe.build<M>(meta: M & BaseMeta): Classe<M>
 	data.metadata = metadata
 	meta.construct, meta.init = nil, nil
 	
-	for index: any, data: any in pairs(meta) do
+	for index: any, data: any in meta :: BaseMeta do
 		if type(index) == 'string' and
 			index:find('^__') then
 
@@ -162,7 +160,7 @@ function Classe.meta<M, E>(meta: M & {},
 	return setmetatable(meta, table.freeze{
 		extends = extends,
 		
-	}), super :: Super<E>
+	}) :: Meta<M, E>, super :: Super<E>
 end
 
 return table.freeze(Classe)
