@@ -3,7 +3,7 @@
 local Types = require(script.Types)
 
 type func = (...any) -> any
-type metaOfClass<C> = index<getmetatable<C & any>, 'meta'>
+type metaOfClass<C> = index<getmetatable<C & AbstractClasse>, 'meta'>
 
 type Meta<D, E> = setmetatable<D, {
 	read extends: (E & AbstractClasse)?,
@@ -13,10 +13,13 @@ type Meta<D, E> = setmetatable<D, {
 		index<metaOfClass<E>, 'self'>,
 }>
 
-type BaseMetaFields = {
-	construct: (...any) -> any,
-	init: func,
-} type BaseMeta = Meta<BaseMetaFields, any>
+type BaseMeta = setmetatable<{
+	construct: func,
+	init: func
+}, {
+	read extends: AbstractClasse?,
+	read self: {[any]: any}
+}>
 
 export type AbstractClasse = setmetatable<{
 	read new: func,
@@ -34,7 +37,8 @@ export type AbstractClasse = setmetatable<{
 
 export type Classe<M> = setmetatable<{
 	read new: Types.moveParams<
-		index<M, 'construct'>, '2', nil, '1', () -> Self<M>>
+		index<M, 'construct'>, '2', nil, 
+		'1', () -> Self<M>>
 }, {
 	read childs: {AbstractClasse},
 	read parent: index<getmetatable<M & BaseMeta>, 'extends'>,
@@ -43,7 +47,7 @@ export type Classe<M> = setmetatable<{
 	read metadata: {
 		__index: {[any]: any}
 	},
-	read meta: getmetatable<M>,
+	read meta: getmetatable<M & BaseMeta>,
 	read constructor: index<M, 'construct'> & func
 }>
 
@@ -152,7 +156,7 @@ function Classe.build<M>(meta: M & BaseMeta): Classe<M>
 end
 
 function Classe.meta<M, E>(meta: M & {}, 
-	extends: (E & AbstractClasse)?): (Meta<M, E>, Super<E>)
+	extends: E?): (Meta<M, E>, Super<E>)
 	
 	local super = if extends then getmetatable(
 		extends :: AbstractClasse).constructor else nil
