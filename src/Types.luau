@@ -87,6 +87,7 @@ export type function getReturningElement(fn: type,
 	index: type)
 	
 	local index = tonumber(index:value())
+	
 	if not index then return types.any end
 	
 	local returns = fn:returns()
