@@ -51,7 +51,9 @@ export type Classe<M> = setmetatable<{
 	read constructor: index<M, 'construct'> & func
 }>
 
-export type Self<M> = index<getmetatable<M>, 'self'>
+export type Self<M> = {
+	construct: nil, init: nil
+} & index<getmetatable<M>, 'self'>
 
 type Super<E> = index<getmetatable<E & any>, 'constructor'>
 
@@ -146,7 +148,7 @@ function Classe.build<M>(meta: M & BaseMeta): Classe<M>
 		setmetatable(obj, metadata)
 
 		for i = 1, initChainLen do
-			initChain[i](obj)
+			(initChain :: func)[i](obj)
 		end
 
 		return obj
