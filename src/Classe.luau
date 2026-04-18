@@ -13,12 +13,12 @@ type Meta<D, E> = setmetatable<D, {
 		index<metaOfClass<E>, 'self'>,
 }>
 
-type BaseMeta = setmetatable<{
+export type BaseMeta = setmetatable<{
 	construct: func,
 	init: func
 }, {
 	read extends: AbstractClasse?,
-	read self: {[any]: any}
+	read self: {}
 }>
 
 export type AbstractClasse = setmetatable<{
@@ -51,9 +51,9 @@ export type Classe<M> = setmetatable<{
 	read constructor: index<M, 'construct'> & func
 }>
 
-export type Self<M> = {
-	construct: nil, init: nil
-} & index<getmetatable<M>, 'self'>
+export type Self<M> = typeof(setmetatable(
+	{} :: index<getmetatable<M>, 'self'>, {}
+))
 
 type Super<E> = index<getmetatable<E & any>, 'constructor'>
 
@@ -148,7 +148,7 @@ function Classe.build<M>(meta: M & BaseMeta): Classe<M>
 		setmetatable(obj, metadata)
 
 		for i = 1, initChainLen do
-			(initChain :: func)[i](obj)
+			(initChain[i] :: func)(obj)
 		end
 
 		return obj
