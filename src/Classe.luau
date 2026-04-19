@@ -38,7 +38,7 @@ export type AbstractClasse = setmetatable<{
 export type Classe<M> = setmetatable<{
 	read new: Types.moveParams<
 		index<M, 'construct'>, '2', nil, 
-		'1', () -> Self<M>>
+		'1', () -> Object<M>>
 }, {
 	read childs: {AbstractClasse},
 	read parent: index<getmetatable<M & BaseMeta>, 'extends'>,
@@ -48,14 +48,20 @@ export type Classe<M> = setmetatable<{
 		__index: {[any]: any}
 	},
 	read meta: getmetatable<M & BaseMeta>,
-	read constructor: index<M, 'construct'> & func
+	read constructor: index<M, 'construct'>
 }>
+
+type Object<M> = index<getmetatable<M>, 'self'>
 
 export type Self<M> = typeof(setmetatable(
 	{} :: index<getmetatable<M>, 'self'>, {}
 ))
 
-type Super<E> = index<getmetatable<E & any>, 'constructor'>
+type Super<E> = Types.moveParams<
+	index<getmetatable<E>, 'constructor'>,
+	'2', nil, '2', ({}) -> ()
+>
+
 
 local Classe, __meta = {}, {}
 
